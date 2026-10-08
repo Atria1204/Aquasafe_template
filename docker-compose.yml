@@ -1,0 +1,72 @@
+# Semua password & rahasia diambil dari file .env (salin dari .env.example)
+services:
+  # 1. Jembatan IoT (Mosquitto MQTT Broker)
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: mqtt_broker
+    restart: always
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+
+  # 2. DATABASE (MySQL)
+  db:
+    image: mysql:8.0
+    container_name: aquasafe_db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      TZ: Asia/Jakarta
+    # Hanya bisa diakses dari komputer ini, tidak dibuka ke internet
+    ports:
+      - "127.0.0.1:3306:3306"
+    volumes:
+      - ./mysql_data:/var/lib/mysql
+      # Tabel otomatis dibuat saat database pertama kali dijalankan
+      - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+
+  # 3. PANEL ADMIN DATABASE (phpMyAdmin) - login pakai DB_USER / DB_PASSWORD
+  phpmyadmin:
+    image: phpmyadmin/phpmyadmin
+    container_name: aquasafe_pma
+    environment:
+      PMA_HOST: db
+    ports:
+      - "127.0.0.1:8080:80"
+    depends_on:
+      - db
+
+  # 4. BACKEND (Node.js)
+  backend:
+    build: ./backend
+    container_name: aquasafe_backend
+    restart: always
+    ports:
+      - "5000:5000"
+    depends_on:
+      - db
+      - mqtt
+    environment:
+      DB_HOST: db
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      MQTT_BROKER_URL: mqtt://mqtt:1883
+      JWT_SECRET: ${JWT_SECRET}
+      DEVICE_API_KEY: ${DEVICE_API_KEY}
+      PUBLIC_MQTT_URL: ${PUBLIC_MQTT_URL}
+
+  # 5. FRONTEND (hasil build dashboard: cd dashboard && npm run build)
+  frontend:
+    image: nginx:alpine
+    container_name: aquasafe_frontend
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./dashboard/dist:/usr/share/nginx/html:ro

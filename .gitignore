@@ -1,0 +1,13 @@
+# Dependency
+node_modules/
+
+# Hasil build
+dashboard/dist/
+
+# Data database lokal
+mysql_data/
+
+# File rahasia (password, token)
+.env
+*.env
+!.env.example
