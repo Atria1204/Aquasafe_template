@@ -79,6 +79,33 @@ Balasannya berisi `data_pakan` (jadwal pagi/sore, gram, dan `sekarang` = 1 kalau
 
 **Device key (opsional, disarankan kalau server dibuka ke internet):** isi `DEVICE_API_KEY` di `.env`. Setelah itu ESP32 wajib mengirim header `x-device-key: <key>`, dan ESP32-CAM menambahkan `&key=<key>` di URL WebSocket.
 
+## Online-kan ke internet (opsional)
+
+Secara default semuanya hanya bisa diakses dari jaringan lokal (WiFi yang sama). Supaya ESP32 dan dashboard bisa diakses dari mana saja, ada 3 komponen yang umum dipakai:
+
+| Komponen | Fungsi | Wajib? |
+|---|---|---|
+| **Server** (mini PC/NUC, laptop yang selalu nyala, atau VPS) | Tempat menjalankan `docker compose` 24 jam | Ya |
+| **Cloudflare Tunnel** | Menghubungkan domain (misal `api.domainkamu.com`) ke server tanpa perlu IP publik atau buka port router | Kalau mau diakses publik |
+| **Tailscale** | VPN pribadi untuk remote server (SSH, phpMyAdmin) dari mana saja. Hanya perangkat yang login ke akun Tailscale yang sama yang bisa masuk | Opsional, untuk admin |
+
+### Cloudflare Tunnel
+1. Punya domain yang DNS-nya dikelola Cloudflare.
+2. Di dashboard Cloudflare: **Zero Trust > Networks > Tunnels > Create a tunnel** (tipe *Cloudflared*). Salin **token**-nya ke `CLOUDFLARE_TUNNEL_TOKEN` di `.env`.
+3. Di tab **Public Hostname** tunnel tersebut, tambahkan:
+   - `api.domainkamu.com` → `http://backend:5000` (backend + WebSocket CCTV)
+   - `domainkamu.com` → `http://frontend:80` (dashboard)
+4. Buat `dashboard/.env` berisi `VITE_API_URL=https://api.domainkamu.com`, lalu `npm run build` ulang.
+5. Jalankan dengan tunnel: `docker compose --profile tunnel up -d --build`
+6. Di firmware ESP32, ganti URL server menjadi `https://api.domainkamu.com/...` dan WebSocket ESP32-CAM ke `api.domainkamu.com` (port 443, path `/api/stream/input`).
+
+Jangan expose phpMyAdmin (8080) atau MySQL (3306) lewat tunnel. Untuk akses admin dari jauh, pakai Tailscale.
+
+### Tailscale (opsional)
+1. Install Tailscale di server dan di laptop kamu, login dengan akun yang sama.
+2. Server akan dapat IP `100.x.y.z`. Dari laptop, dashboard bisa dibuka di `http://100.x.y.z` dan backend otomatis terdeteksi di `http://100.x.y.z:5000`.
+3. Untuk phpMyAdmin lewat Tailscale, ubah port di `docker-compose.yml` dari `127.0.0.1:8080:80` menjadi `8080:80`.
+
 ## Keamanan
 
 - Password user disimpan dalam bentuk hash (bcrypt), bukan teks asli.
@@ -86,4 +113,4 @@ Balasannya berisi `data_pakan` (jadwal pagi/sore, gram, dan `sekarang` = 1 kalau
 - Tanpa login, ESP32 hanya bisa mengirim data sensor dan perintah STOP pakan.
 - MySQL & phpMyAdmin hanya bisa diakses dari komputer server (`127.0.0.1`).
 - MQTT broker masih `allow_anonymous`. Jangan buka port 1883/9001 ke internet tanpa menambahkan password.
-- Jangan pernah commit file `.env`.
+- Jangan pernah commit file `.env` (berisi password database, JWT_SECRET, dan token Cloudflare).

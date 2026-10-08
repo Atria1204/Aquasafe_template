@@ -70,3 +70,19 @@ services:
       - "80:80"
     volumes:
       - ./dashboard/dist:/usr/share/nginx/html:ro
+
+  # 6. (OPSIONAL) CLOUDFLARE TUNNEL - agar backend bisa diakses dari internet lewat domain sendiri
+  #    tanpa buka port router. Hanya jalan kalau dipanggil: docker compose --profile tunnel up -d
+  #    Isi CLOUDFLARE_TUNNEL_TOKEN di .env (lihat README bagian "Online-kan ke internet").
+  cloudflared:
+    image: cloudflare/cloudflared:2025.8.1
+    container_name: aquasafe_tunnel
+    restart: always
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - backend
+      - frontend
+    profiles:
+      - tunnel
